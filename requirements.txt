@@ -1,0 +1,10 @@
+tqdm
+h5py
+numpy
+torch
+torch-vision
+transformers
+pillow
+nltk
+block.bootstrap.pytorch 
+murel.bootstrap.pytorch

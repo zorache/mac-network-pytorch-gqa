@@ -1,0 +1,26 @@
+{
+    "os": "Linux-3.10.0-1160.21.1.el7.x86_64-x86_64-with-centos-7.9.2009-Core",
+    "python": "3.7.9",
+    "heartbeatAt": "2021-05-01T21:27:58.880223",
+    "startedAt": "2021-05-01T21:27:49.901441",
+    "docker": null,
+    "gpu": "GeForce RTX 2080 Ti",
+    "gpu_count": 8,
+    "cpu_count": 40,
+    "cuda": "10.2.89",
+    "args": [
+        "gqa"
+    ],
+    "state": "running",
+    "program": "train.py",
+    "codePath": "train.py",
+    "git": {
+        "remote": "https://github.com/ronilp/mac-network-pytorch-gqa.git",
+        "commit": "20bbe0b98d904971673880f0828ed6b52a4a92d4"
+    },
+    "email": null,
+    "root": "/home/ugrad/zche/visual-reasoning-proj/mac-network-pytorch-gqa",
+    "host": "peterchin5.bu.edu",
+    "username": "zche",
+    "executable": "/scratch3/zche/anaconda3/envs/default/bin/python3"
+}
