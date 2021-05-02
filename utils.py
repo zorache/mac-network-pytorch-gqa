@@ -17,7 +17,7 @@ def get_or_load_embeddings():
         return embedding_weights
 
     dataset_type = sys.argv[1]
-    with open(f'data/{dataset_type}_dic.pkl', 'rb') as f:
+    with open(f'/scratch3/zche/GQA/processed/{dataset_type}_dic.pkl', 'rb') as f:
         dic = pickle.load(f)
 
     id2word = set(dic['word_dic'].keys())
@@ -31,7 +31,7 @@ def get_or_load_embeddings():
     embedding_weights = np.random.normal(0, scale=sd, size=[vocab_size, embed_size])
     embedding_weights = embedding_weights.astype(np.float32)
 
-    with open("data/glove.6B.300d.txt", encoding="utf-8", mode="r") as textFile:
+    with open("/scratch3/zche/GQA/glove.6B.300d.txt", encoding="utf-8", mode="r") as textFile:
         for line in textFile:
             line = line.split()
             word = line[0]

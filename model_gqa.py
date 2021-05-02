@@ -1,11 +1,33 @@
 import torch
 import torch.nn.functional as F
-from block.models.networks.fusions.fusions import Tucker
+#from block.models.networks.fusions.fusions import Tucker
 from torch import nn
 from torch.nn.init import kaiming_uniform_, xavier_uniform_
 
 import config
 from utils import get_or_load_embeddings
+
+
+from collections import namedtuple
+
+
+batch_x_fields = (
+    "images",
+    "question_ids",
+    "questions",
+    "question_lengths",
+    "question_bert_outputs",
+    "question_bert_states",
+    "question_bert_lengths",
+    "objects",
+    "object_lengths",
+    "object_bounding_boxes",
+    "object_identities",
+    "object_attributes",
+    "object_relations")
+
+#Batch_Bert = namedtuple("Batch_Bert", batch_x_fields) defaults=(None,) * len(batch_x_fields))
+
 
 
 def linear(in_dim, out_dim, bias=True):
@@ -30,8 +52,19 @@ class ControlUnit(nn.Module):
         self.dim = dim
 
     def forward(self, step, context, question, control):
+        #print(control.shape)
+        #print(control.shape)
+        #print(control.shape)
+        #print(control.shape)
+        #print(control.shape)
+        #print(control.shape)
         position_aware = self.position_aware[step](question)
-
+        #print(control.shape)
+        #print(control.shape)
+        #print(control.shape)
+        #print(control.shape)
+        #print(control.shape)
+        #print(control.shape)
         control_question = torch.cat([control, position_aware], 1)
         control_question = self.control_question(control_question)
         control_question = control_question.unsqueeze(1)
@@ -46,6 +79,27 @@ class ControlUnit(nn.Module):
         return next_control
 
 
+# class ReadUnit(nn.Module):
+#     def __init__(self, dim):
+#         super().__init__()
+
+#         self.mem = linear(dim, dim)
+#         self.concat = linear(dim * 2, dim)
+#         self.attn = linear(dim, 1)
+#         self.tucker = Tucker((2048, 2048), 1, mm_dim=50, shared=True)
+
+#     def forward(self, memory, know, control):
+#         mem = self.mem(memory[-1]).unsqueeze(2)
+#         s_matrix = (mem * know)
+#         s_matrix = s_matrix.view(-1, 2048)
+#         attn = self.tucker([s_matrix, control[-1].repeat(know.size(2), 1)]).view(know.size(2), know.size(0))
+#         attn = attn.transpose(0, 1)
+#         attn = F.softmax(attn, 1).unsqueeze(1)
+#         read = (attn * know).sum(2)
+
+#         return read
+
+
 class ReadUnit(nn.Module):
     def __init__(self, dim):
         super().__init__()
@@ -53,19 +107,27 @@ class ReadUnit(nn.Module):
         self.mem = linear(dim, dim)
         self.concat = linear(dim * 2, dim)
         self.attn = linear(dim, 1)
-        self.tucker = Tucker((2048, 2048), 1, mm_dim=50, shared=True)
 
-    def forward(self, memory, know, control):
-        mem = self.mem(memory[-1]).unsqueeze(2)
-        s_matrix = (mem * know)
-        s_matrix = s_matrix.view(-1, 2048)
-        attn = self.tucker([s_matrix, control[-1].repeat(know.size(2), 1)]).view(know.size(2), know.size(0))
-        attn = attn.transpose(0, 1)
+    def forward(self, memories, k, c):
+        """
+        :param memories:
+        :param k: knowledge
+        :param c: control
+        :return: r_i
+        """
+        # 1. Interaction between knowledge k_{h,w} and memory m_{i-1}
+        m_prev = memories[-1]
+        I = self.mem(m_prev).unsqueeze(2) * k  # I_{i,h,w}
+
+        # 2. Calculate I'_{i,h,w}
+        I = self.concat(torch.cat([I, k], 1).permute(0, 2, 1))
+
+        # 3. Attention distribution over knowledge base elements
+        attn = I * c[-1].unsqueeze(1)
+        attn = self.attn(attn).squeeze(2)
         attn = F.softmax(attn, 1).unsqueeze(1)
-        read = (attn * know).sum(2)
-
+        read = (attn * k).sum(2)
         return read
-
 
 class WriteUnit(nn.Module):
     def __init__(self, dim, self_attention=False, memory_gate=False):
@@ -122,22 +184,22 @@ class MACUnit(nn.Module):
         self.dim = dim
         self.max_step = max_step
         self.dropout = dropout
-        self.dropouts = {}
-        self.dropouts["encInput"]: config.encInputDropout
-        self.dropouts["encState"]: config.encStateDropout
-        self.dropouts["stem"]: config.stemDropout
-        self.dropouts["question"]: config.qDropout
-        self.dropouts["memory"]: config.memoryDropout
-        self.dropouts["read"]: config.readDropout
-        self.dropouts["write"]: config.writeDropout
-        self.dropouts["output"]: config.outputDropout
-        self.dropouts["controlPre"]: config.controlPreDropout
-        self.dropouts["controlPost"]: config.controlPostDropout
-        self.dropouts["wordEmb"]: config.wordEmbDropout
-        self.dropouts["word"]: config.wordDp
-        self.dropouts["vocab"]: config.vocabDp
-        self.dropouts["object"]: config.objectDp
-        self.dropouts["wordStandard"]: config.wordStandardDp
+        # self.dropouts = {}
+        # self.dropouts["encInput"]: config.encInputDropout
+        # self.dropouts["encState"]: config.encStateDropout
+        # self.dropouts["stem"]: config.stemDropout
+        # self.dropouts["question"]: config.qDropout
+        # self.dropouts["memory"]: config.memoryDropout
+        # self.dropouts["read"]: config.readDropout
+        # self.dropouts["write"]: config.writeDropout
+        # self.dropouts["output"]: config.outputDropout
+        # self.dropouts["controlPre"]: config.controlPreDropout
+        # self.dropouts["controlPost"]: config.controlPostDropout
+        # self.dropouts["wordEmb"]: config.wordEmbDropout
+        # self.dropouts["word"]: config.wordDp
+        # self.dropouts["vocab"]: config.vocabDp
+        # self.dropouts["object"]: config.objectDp
+        # self.dropouts["wordStandard"]: config.wordStandardDp
 
     def get_mask(self, x, dropout):
         mask = torch.empty_like(x).bernoulli_(1 - dropout)
@@ -176,15 +238,19 @@ class MACUnit(nn.Module):
 
 
 class MACNetwork(nn.Module):
-    def __init__(self, n_vocab, dim, embed_hidden=300,
+    def __init__(self, n_vocab, dim, config, embed_hidden=300,
                 max_step=12, self_attention=False, memory_gate=False,
                 classes=28, dropout=0.15):
         super().__init__()
-
+        self.config=config
         self.conv = nn.Sequential(nn.Conv2d(1024, dim, 3, padding=1),
                                 nn.ELU(),
                                 nn.Conv2d(dim, dim, 3, padding=1),
                                 nn.ELU())
+        
+
+        self.encoder_output_linear = nn.Linear(config.encoderdim, 2048)
+        self.encoder_state_linear = nn.Linear(config.encoderdim, 4096)
 
         self.embed = nn.Embedding(n_vocab, embed_hidden)
         self.embed.weight.data = torch.Tensor(get_or_load_embeddings())
@@ -216,22 +282,38 @@ class MACNetwork(nn.Module):
 
         kaiming_uniform_(self.classifier[0].weight)
 
-    def forward(self, image, question, question_len, dropout=0.15):
+    def forward(self, image, question, question_len, b_length=None, b_outputs=None, b_state=None ,dropout=0.15):
         b_size = question.size(0)
-
         img = image
         img = img.view(b_size, self.dim, -1)
 
-        embed = self.embed(question)
-        embed = nn.utils.rnn.pack_padded_sequence(embed, question_len,
-                                                batch_first=True)
-        lstm_out, (h, _) = self.lstm(embed)
-        lstm_out, _ = nn.utils.rnn.pad_packed_sequence(lstm_out, batch_first=True)
-        lstm_out = self.lstm_proj(lstm_out)
-        h = h.permute(1, 0, 2).contiguous().view(b_size, -1)
+        if self.config.bert:
+            b_state=b_state.cuda()
+            b_outputs = b_outputs.cuda()
+            #use BERT embeddings
+            h = self.encoder_state_linear(b_state)
+            print('here')
+            c = self.encoder_output_linear(b_outputs) 
+            print('passed')
+        else:
+            #embed with bidirectional LSTM
+            embed = self.embed(question)
+            embed = nn.utils.rnn.pack_padded_sequence(embed, question_len,
+                                                    batch_first=True)
+            lstm_out, (h, _) = self.lstm(embed)
+            lstm_out, _ = nn.utils.rnn.pad_packed_sequence(lstm_out, batch_first=True)
+            lstm_out = self.lstm_proj(lstm_out)
+            c= lstm_out
+            h = h.permute(1, 0, 2).contiguous().view(b_size, -1)   
 
-        memory = self.mac(lstm_out, h, img)
-
+        #MAC cell 
+        #wandb.log({'h': h.shape, 'epoch': 5})
+        #wandb.log({'c': c.shape, 'epoch': 5})
+        print("h:"+str(h.shape))  #[128, 4096]
+        print("c:"+str(c.shape))  #[128, x , 2048]
+        memory = self.mac(c, h, img)
+        
+        #Output
         out = torch.cat([memory, h], 1)
         out = self.classifier(out)
 
